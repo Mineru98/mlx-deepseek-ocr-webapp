@@ -1,5 +1,9 @@
 # OCR Service
 
+<p align="center">
+  <img src="./static/thumb.png" alt="OCR Service Preview" width="800">
+</p>
+
 DeepSeek-OCR 모델을 사용한 이미지/PDF 텍스트 추출 서비스입니다.
 
 ## 기능
