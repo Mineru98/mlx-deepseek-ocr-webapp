@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from mlx_vlm import generate, load
+from mlx_vlm import generate, load, stream_generate
 from mlx_vlm.prompt_utils import apply_chat_template
 from mlx_vlm.utils import load_config
 from PIL import Image
@@ -129,7 +129,9 @@ async def ocr_stream(
     max_tokens: int = Form(default=4096),
     temperature: float = Form(default=0.0),
 ):
-    """Streaming OCR endpoint for images and PDFs."""
+    """Streaming OCR endpoint for images and PDFs with real token-by-token streaming."""
+    import json
+
     content = await file.read()
     content_type = file.content_type or ""
     unique_filename = generate_unique_filename(file.filename or "file")
@@ -146,50 +148,36 @@ async def ocr_stream(
     else:
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
 
-    async def generate_stream():
+    def generate_stream():
         for page_idx, image in enumerate(images):
-            # Send page start marker for PDF
-            if len(images) > 1:
-                yield f"data: {{'type': 'page_start', 'page': {page_idx + 1}, 'total': {len(images)}}}\n\n"
+            # Send page start marker
+            yield f"data: {json.dumps({'type': 'page_start', 'page': page_idx + 1, 'total': len(images)})}\n\n"
 
             formatted_prompt = apply_chat_template(
                 processor, config, prompt, num_images=1
             )
 
-            # Generate with streaming
-            output = generate(
+            # Use stream_generate for real token-by-token streaming
+            token_generator = stream_generate(
                 model,
                 processor,
                 formatted_prompt,
                 image=[image],
                 max_tokens=max_tokens,
                 temperature=temperature,
-                verbose=False,
             )
 
-            # Handle GenerationResult object
-            if hasattr(output, "text"):
-                result = output.text
-            elif hasattr(output, "__str__"):
-                result = str(output)
-            else:
-                result = output
+            # Stream tokens as they are generated
+            for result in token_generator:
+                # result is a GenerationResult object, extract the text
+                text = result.text if hasattr(result, "text") else str(result)
+                if text:
+                    yield f"data: {json.dumps({'type': 'content', 'text': text, 'page': page_idx + 1})}\n\n"
 
-            # Stream the result in chunks
-            chunk_size = 50
-            for i in range(0, len(result), chunk_size):
-                chunk = result[i : i + chunk_size]
-                import json
-
-                yield f"data: {json.dumps({'type': 'content', 'text': chunk, 'page': page_idx + 1})}\n\n"
-
-            # Send page end marker for PDF
-            if len(images) > 1:
-                yield f"data: {{'type': 'page_end', 'page': {page_idx + 1}}}\n\n"
+            # Send page end marker
+            yield f"data: {json.dumps({'type': 'page_end', 'page': page_idx + 1})}\n\n"
 
         # Send completion marker
-        import json
-
         yield f"data: {json.dumps({'type': 'done', 'filename': unique_filename, 'total_pages': len(images)})}\n\n"
 
     return StreamingResponse(

@@ -33,6 +33,19 @@
         .animate-pulse-fast {
             animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        .cursor-blink {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background-color: #3B82F6;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
+            margin-left: 1px;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -326,7 +339,7 @@
 
         // Copy result
         copyBtn.addEventListener('click', () => {
-            const text = resultContent.textContent;
+            const text = resultContent.innerText;
             navigator.clipboard.writeText(text).then(() => {
                 showToast('결과가 클립보드에 복사되었습니다.');
             });
@@ -341,7 +354,7 @@
             submitText.textContent = '처리 중...';
             submitSpinner.classList.remove('hidden');
             resultSection.classList.remove('hidden');
-            resultContent.textContent = '';
+            resultContent.innerHTML = '<span class="cursor-blink"></span>';
             processingStatus.classList.remove('hidden');
             statusText.textContent = '파일 업로드 중...';
             pageInfo.classList.add('hidden');
@@ -369,6 +382,20 @@
                 let currentPage = 1;
                 let totalPages = 1;
                 let fullText = '';
+                let isStreaming = true;
+
+                // Helper function to update content with cursor
+                const updateContent = (text, showCursor = true) => {
+                    const escapedText = text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                    resultContent.innerHTML = escapedText + (showCursor ? '<span class="cursor-blink"></span>' : '');
+                    resultContent.scrollTop = resultContent.scrollHeight;
+                };
+
+                statusText.textContent = '텍스트 생성 중...';
 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -388,15 +415,15 @@
                                     currentPage = data.page;
                                     if (data.page > 1) {
                                         fullText += '\n\n--- 페이지 ' + data.page + ' ---\n\n';
-                                        resultContent.textContent = fullText;
+                                        updateContent(fullText);
                                     }
                                 } else if (data.type === 'content') {
                                     fullText += data.text;
-                                    resultContent.textContent = fullText;
-                                    resultContent.scrollTop = resultContent.scrollHeight;
+                                    updateContent(fullText);
                                 } else if (data.type === 'page_end') {
                                     // Page completed
                                 } else if (data.type === 'done') {
+                                    isStreaming = false;
                                     statusText.textContent = '완료!';
                                     processedFilename.textContent = `처리된 파일: ${data.filename}`;
                                     fileInfo.classList.remove('hidden');
@@ -404,25 +431,21 @@
                                         pageInfo.textContent = `총 ${data.total_pages} 페이지`;
                                         pageInfo.classList.remove('hidden');
                                     }
+                                    // Remove cursor when done
+                                    updateContent(fullText, false);
                                 }
                             } catch (e) {
-                                // Handle malformed JSON (like page markers with single quotes)
-                                if (line.includes("'type': 'page_start'")) {
-                                    const match = line.match(/page': (\d+), 'total': (\d+)/);
-                                    if (match) {
-                                        statusText.textContent = `페이지 ${match[1]}/${match[2]} 처리 중...`;
-                                        if (parseInt(match[1]) > 1) {
-                                            fullText += '\n\n--- 페이지 ' + match[1] + ' ---\n\n';
-                                            resultContent.textContent = fullText;
-                                        }
-                                    }
-                                }
+                                console.warn('JSON parse error:', e, line);
                             }
                         }
                     }
                 }
 
                 processingStatus.classList.add('hidden');
+                // Ensure cursor is removed
+                if (isStreaming) {
+                    updateContent(fullText, false);
+                }
             } catch (error) {
                 console.error('Error:', error);
                 resultContent.textContent = '오류가 발생했습니다: ' + error.message;
