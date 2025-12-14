@@ -71,6 +71,9 @@ def pdf_to_images(pdf_bytes: bytes, dpi: int = 150, selected_pages: Optional[lis
         pix = page.get_pixmap(matrix=mat)
         img_data = pix.tobytes("png")
         image = Image.open(io.BytesIO(img_data))
+        # Convert to RGB to ensure 3 channels
+        if image.mode != "RGB":
+            image = image.convert("RGB")
         images.append(image)
 
     pdf_document.close()
@@ -135,7 +138,11 @@ async def ocr(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif content_type.startswith("image/"):
-        images = [Image.open(io.BytesIO(content))]
+        image = Image.open(io.BytesIO(content))
+        # Convert to RGB to ensure 3 channels
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        images = [image]
     else:
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
 
@@ -208,7 +215,11 @@ async def ocr_stream(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif content_type.startswith("image/"):
-        images = [Image.open(io.BytesIO(content))]
+        image = Image.open(io.BytesIO(content))
+        # Convert to RGB to ensure 3 channels
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        images = [image]
     else:
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
 
