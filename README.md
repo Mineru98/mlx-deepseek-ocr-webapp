@@ -33,7 +33,7 @@ uv pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8787
 ```
 
-브라우저에서 http://localhost:8000 접속
+브라우저에서 http://localhost:8787 접속
 
 ### CLI 사용
 
@@ -53,7 +53,7 @@ python -m mlx_vlm.generate \
 스트리밍 OCR 엔드포인트 (이미지 + PDF 지원)
 
 ```bash
-curl -X POST http://localhost:8000/api/ocr/stream \
+curl -X POST http://localhost:8787/api/ocr/stream \
     -F "file=@document.pdf" \
     -F "prompt=Read all the text in this image." \
     -F "max_tokens=128" \
@@ -65,7 +65,7 @@ curl -X POST http://localhost:8000/api/ocr/stream \
 일반 OCR 엔드포인트 (이미지 + PDF 지원)
 
 ```bash
-curl -X POST http://localhost:8000/api/ocr \
+curl -X POST http://localhost:8787/api/ocr \
     -F "file=@image.png" \
     -F "prompt=Read all the text in this image."
 ```
@@ -75,7 +75,7 @@ curl -X POST http://localhost:8000/api/ocr \
 서버 상태 확인
 
 ```bash
-curl http://localhost:8000/api/health
+curl http://localhost:8787/api/health
 ```
 
 ## 파라미터
