@@ -78,6 +78,37 @@ curl -X POST http://localhost:8787/api/ocr \
 curl http://localhost:8787/api/health
 ```
 
+## n8n 워크플로우 사용
+
+이 OCR 서비스를 n8n 워크플로우에서 사용할 수 있습니다. 제공된 워크플로우 파일을 사용하면 간편하게 OCR 기능을 통합할 수 있습니다.
+
+### 워크플로우 가져오기
+
+1. n8n 대시보드에서 **Workflows** 메뉴로 이동
+2. **Import from File** 또는 **Import from URL** 선택
+3. `static/딥시크 OCR.json` 파일을 선택하여 가져오기
+
+### 워크플로우 구성
+
+워크플로우는 다음 3개의 노드로 구성되어 있습니다:
+
+1. **Form Trigger**: 웹 폼을 통해 파일과 프롬프트를 입력받습니다
+   - 파일 필드: PNG, PDF 파일 업로드
+   - 프롬프트 필드: OCR에 사용할 프롬프트 입력
+
+2. **HTTP Request**: OCR 서비스의 `/api/ocr` 엔드포인트를 호출합니다
+   - URL: `http://host.docker.internal:8787/api/ocr` (Docker 환경)
+   - 로컬 환경의 경우 `http://localhost:8787/api/ocr`로 변경 필요
+
+3. **Form**: OCR 결과를 사용자에게 표시합니다
+
+### 설정 방법
+
+1. 워크플로우를 가져온 후, **HTTP Request** 노드를 열어 URL을 확인합니다
+2. Docker 환경이 아닌 경우, URL을 `http://localhost:8787/api/ocr`로 변경합니다
+3. 워크플로우를 활성화하면 Form Trigger의 웹훅 URL이 생성됩니다
+4. 해당 URL을 통해 폼에 접근하여 OCR을 사용할 수 있습니다
+
 ## 파라미터
 
 | 파라미터 | 기본값 | 설명 |

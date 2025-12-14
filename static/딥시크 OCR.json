@@ -1,0 +1,118 @@
+{
+  "name": "딥시크 OCR",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "딥시크 ocr 테스트",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "data",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".png, .pdf",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "prompt",
+              "placeholder": "원하는 내용을 입력하세요.",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "79531978-de7e-4441-a0bf-8445a7cb9154",
+      "name": "On form submission",
+      "webhookId": "813bb8c4-d87b-47b5-b814-a33c70365c52"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8787/api/ocr",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "30fe185f-aa7e-4d86-b650-1f4a1d8ea6a3",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "OCR 결과",
+        "completionMessage": "={{ $json.result }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "d3e22a5b-54bf-42b2-bbf9-52f4b5c39c53",
+      "name": "Form",
+      "webhookId": "2e05dc23-09ce-4ce7-b835-6c9dab3c3cad"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "63b9b505-20b1-4e29-acc8-0f87b09f5d4a",
+  "meta": {
+    "instanceId": "b2de6a991ab241ca6409e95c5e1727d81c1f929f30c8989d7eb4e199392e90a7"
+  },
+  "id": "YqbP4Wt0C60ozRD8",
+  "tags": []
+}
