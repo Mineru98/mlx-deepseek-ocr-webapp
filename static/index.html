@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCR Service</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -105,6 +111,23 @@
                 <div id="imagePreviewContainer" class="mt-4 hidden">
                     <img id="imagePreview" class="max-h-48 mx-auto rounded-lg shadow" alt="Preview">
                 </div>
+                <!-- PDF Page Selection Button -->
+                <div id="pdfPageSelectionContainer" class="mt-4 hidden">
+                    <button id="viewPdfPages" class="w-full bg-blue-50 border-2 border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors text-primary font-medium flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        <span>페이지 선택 (클릭하여 PDF 보기)</span>
+                    </button>
+                    <!-- Selected Pages Display -->
+                    <div id="selectedPagesDisplay" class="mt-3 hidden">
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <p class="text-sm text-green-700 mb-2 font-medium">선택된 페이지:</p>
+                            <p id="selectedPagesList" class="text-sm text-gray-700"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Prompt Input -->
@@ -129,7 +152,7 @@
                     <input
                         type="number"
                         id="maxTokens"
-                        value="4096"
+                        value="128"
                         min="100"
                         max="8192"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -208,6 +231,68 @@
         </div>
     </div>
 
+    <!-- PDF Page Selection Modal -->
+    <div id="pdfModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full mx-4 max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between p-6 border-b border-gray-200">
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">페이지 선택</h2>
+                    <p class="text-sm text-gray-500 mt-1">
+                        처리할 페이지를 선택하세요 (선택 안하면 전체 처리)
+                    </p>
+                </div>
+                <button id="closeModal" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="flex-1 overflow-y-auto p-6">
+                <!-- Selection Controls -->
+                <div class="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                    <div class="flex space-x-3">
+                        <button id="selectAll" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors text-sm">
+                            전체 선택
+                        </button>
+                        <button id="deselectAll" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm">
+                            선택 해제
+                        </button>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        선택된 페이지: <span id="selectedCount" class="font-semibold text-primary">0</span>
+                    </div>
+                </div>
+
+                <!-- PDF Thumbnail Grid -->
+                <div id="pdfThumbnails" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    <!-- Thumbnails will be inserted here dynamically -->
+                </div>
+
+                <!-- Loading State -->
+                <div id="pdfLoading" class="hidden flex flex-col items-center justify-center py-12">
+                    <svg class="animate-spin h-12 w-12 text-primary mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="text-gray-600">PDF 로딩 중...</p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+                <button id="cancelSelection" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                    취소
+                </button>
+                <button id="confirmSelection" class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-colors">
+                    확인
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // DOM Elements
         const dropZone = document.getElementById('dropZone');
@@ -236,6 +321,26 @@
 
         let selectedFile = null;
 
+        // PDF-specific state management
+        let pdfDocument = null;
+        let selectedPages = new Set(); // Track selected page numbers
+        let totalPdfPages = 0;
+
+        // Additional DOM elements for PDF modal
+        const pdfModal = document.getElementById('pdfModal');
+        const pdfThumbnails = document.getElementById('pdfThumbnails');
+        const pdfLoading = document.getElementById('pdfLoading');
+        const viewPdfPages = document.getElementById('viewPdfPages');
+        const pdfPageSelectionContainer = document.getElementById('pdfPageSelectionContainer');
+        const selectedPagesDisplay = document.getElementById('selectedPagesDisplay');
+        const selectedPagesList = document.getElementById('selectedPagesList');
+        const selectedCount = document.getElementById('selectedCount');
+        const closeModal = document.getElementById('closeModal');
+        const cancelSelection = document.getElementById('cancelSelection');
+        const confirmSelection = document.getElementById('confirmSelection');
+        const selectAll = document.getElementById('selectAll');
+        const deselectAll = document.getElementById('deselectAll');
+
         // Format file size
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
@@ -255,6 +360,169 @@
                 toast.classList.add('translate-y-full', 'opacity-0');
             }, 3000);
         }
+
+        // Load and render PDF thumbnails
+        async function loadPdfThumbnails(file) {
+            try {
+                pdfLoading.classList.remove('hidden');
+                pdfThumbnails.innerHTML = '';
+
+                const arrayBuffer = await file.arrayBuffer();
+                pdfDocument = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                totalPdfPages = pdfDocument.numPages;
+
+                // Render all pages as thumbnails
+                for (let pageNum = 1; pageNum <= totalPdfPages; pageNum++) {
+                    const page = await pdfDocument.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 0.5 });
+
+                    // Create canvas for thumbnail
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+
+                    // Create thumbnail container
+                    const thumbnailDiv = document.createElement('div');
+                    thumbnailDiv.className = 'relative group cursor-pointer';
+                    thumbnailDiv.innerHTML = `
+                        <div class="page-thumbnail border-2 rounded-lg overflow-hidden transition-all ${
+                            selectedPages.has(pageNum) ? 'border-primary shadow-lg' : 'border-gray-300 hover:border-primary'
+                        }">
+                            <div class="relative">
+                                <img src="${canvas.toDataURL()}" alt="Page ${pageNum}" class="w-full">
+                                <div class="absolute top-2 left-2">
+                                    <input type="checkbox"
+                                           class="page-checkbox w-5 h-5 rounded cursor-pointer"
+                                           data-page="${pageNum}"
+                                           ${selectedPages.has(pageNum) ? 'checked' : ''}>
+                                </div>
+                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all pointer-events-none"></div>
+                            </div>
+                            <div class="bg-gray-100 p-2 text-center">
+                                <span class="text-sm font-medium text-gray-700">페이지 ${pageNum}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    // Add click handler
+                    thumbnailDiv.addEventListener('click', (e) => {
+                        if (e.target.type !== 'checkbox') {
+                            const checkbox = thumbnailDiv.querySelector('.page-checkbox');
+                            checkbox.checked = !checkbox.checked;
+                            checkbox.dispatchEvent(new Event('change'));
+                        }
+                    });
+
+                    // Checkbox change handler
+                    const checkbox = thumbnailDiv.querySelector('.page-checkbox');
+                    checkbox.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        const pageNum = parseInt(checkbox.dataset.page);
+                        const thumbnailContainer = checkbox.closest('.page-thumbnail');
+
+                        if (checkbox.checked) {
+                            selectedPages.add(pageNum);
+                            thumbnailContainer.classList.remove('border-gray-300');
+                            thumbnailContainer.classList.add('border-primary', 'shadow-lg');
+                        } else {
+                            selectedPages.delete(pageNum);
+                            thumbnailContainer.classList.remove('border-primary', 'shadow-lg');
+                            thumbnailContainer.classList.add('border-gray-300');
+                        }
+
+                        updateSelectedCount();
+                    });
+
+                    pdfThumbnails.appendChild(thumbnailDiv);
+                }
+
+                pdfLoading.classList.add('hidden');
+            } catch (error) {
+                console.error('PDF loading error:', error);
+                showToast('PDF 로딩 중 오류가 발생했습니다.');
+                pdfLoading.classList.add('hidden');
+            }
+        }
+
+        // Update selected page count display
+        function updateSelectedCount() {
+            selectedCount.textContent = selectedPages.size;
+        }
+
+        // Update selected pages display in main UI
+        function updateSelectedPagesDisplay() {
+            if (selectedPages.size > 0) {
+                const pagesArray = Array.from(selectedPages).sort((a, b) => a - b);
+                selectedPagesList.textContent = pagesArray.join(', ');
+                selectedPagesDisplay.classList.remove('hidden');
+            } else {
+                selectedPagesDisplay.classList.add('hidden');
+            }
+        }
+
+        // Open PDF modal
+        function openPdfModal() {
+            pdfModal.classList.remove('hidden');
+            pdfModal.classList.add('flex');
+        }
+
+        // Close PDF modal
+        function closePdfModal() {
+            pdfModal.classList.add('hidden');
+            pdfModal.classList.remove('flex');
+        }
+
+        // Modal event listeners
+        viewPdfPages.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            await loadPdfThumbnails(selectedFile);
+            openPdfModal();
+        });
+
+        closeModal.addEventListener('click', closePdfModal);
+        cancelSelection.addEventListener('click', closePdfModal);
+
+        confirmSelection.addEventListener('click', () => {
+            updateSelectedPagesDisplay();
+            closePdfModal();
+        });
+
+        selectAll.addEventListener('click', () => {
+            selectedPages.clear();
+            for (let i = 1; i <= totalPdfPages; i++) {
+                selectedPages.add(i);
+            }
+            // Update all checkboxes and visuals
+            document.querySelectorAll('.page-checkbox').forEach(checkbox => {
+                checkbox.checked = true;
+                checkbox.closest('.page-thumbnail').classList.remove('border-gray-300');
+                checkbox.closest('.page-thumbnail').classList.add('border-primary', 'shadow-lg');
+            });
+            updateSelectedCount();
+        });
+
+        deselectAll.addEventListener('click', () => {
+            selectedPages.clear();
+            document.querySelectorAll('.page-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.closest('.page-thumbnail').classList.remove('border-primary', 'shadow-lg');
+                checkbox.closest('.page-thumbnail').classList.add('border-gray-300');
+            });
+            updateSelectedCount();
+        });
+
+        // Close modal on backdrop click
+        pdfModal.addEventListener('click', (e) => {
+            if (e.target === pdfModal) {
+                closePdfModal();
+            }
+        });
 
         // Handle file selection
         function handleFileSelect(file) {
@@ -284,6 +552,10 @@
                 previewIcon.classList.remove('bg-green-500');
                 previewIcon.classList.add('bg-red-500');
                 imagePreviewContainer.classList.add('hidden');
+                // Show PDF page selection button for PDFs
+                pdfPageSelectionContainer.classList.remove('hidden');
+                selectedPages.clear(); // Reset selections
+                selectedPagesDisplay.classList.add('hidden');
             } else {
                 previewIcon.innerHTML = `
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -300,6 +572,9 @@
                     imagePreviewContainer.classList.remove('hidden');
                 };
                 reader.readAsDataURL(file);
+                // Hide PDF controls for images
+                pdfPageSelectionContainer.classList.add('hidden');
+                selectedPagesDisplay.classList.add('hidden');
             }
         }
 
@@ -335,6 +610,12 @@
             filePreview.classList.add('hidden');
             imagePreviewContainer.classList.add('hidden');
             submitBtn.disabled = true;
+            // Reset PDF state
+            selectedPages.clear();
+            pdfPageSelectionContainer.classList.add('hidden');
+            selectedPagesDisplay.classList.add('hidden');
+            pdfDocument = null;
+            totalPdfPages = 0;
         });
 
         // Copy result
@@ -368,7 +649,14 @@
             formData.append('temperature', temperature.value);
 
             try {
-                const response = await fetch('/api/ocr/stream', {
+                // Build URL with page selection
+                let url = '/api/ocr/stream';
+                if (selectedPages.size > 0) {
+                    const pagesParam = Array.from(selectedPages).sort((a, b) => a - b).join(',');
+                    url += `?pages=${encodeURIComponent(pagesParam)}`;
+                }
+
+                const response = await fetch(url, {
                     method: 'POST',
                     body: formData
                 });

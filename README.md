@@ -52,7 +52,7 @@ python -m mlx_vlm.generate \
 curl -X POST http://localhost:8000/api/ocr/stream \
     -F "file=@document.pdf" \
     -F "prompt=Read all the text in this image." \
-    -F "max_tokens=4096" \
+    -F "max_tokens=128" \
     -F "temperature=0.0"
 ```
 
@@ -80,5 +80,5 @@ curl http://localhost:8000/api/health
 |---------|--------|------|
 | file | (필수) | 이미지 또는 PDF 파일 |
 | prompt | "Read all the text in this image." | OCR 프롬프트 |
-| max_tokens | 4096 | 최대 토큰 수 |
+| max_tokens | 128 | 최대 토큰 수 |
 | temperature | 0.0 | 생성 온도 (0.0 = 결정적) |
