@@ -107,17 +107,41 @@ async def ocr(
     prompt: str = Form(default="Read all the text in this image."),
     max_tokens: int = Form(default=128),
     temperature: float = Form(default=0.0),
+    pages: Optional[str] = Query(default=None, description="Comma-separated page numbers (e.g., '1,3,5')"),
 ):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    """OCR endpoint for images and PDFs."""
+    content = await file.read()
+    content_type = file.content_type or ""
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    # Determine if PDF or image
+    is_pdf = content_type == "application/pdf" or (file.filename and file.filename.lower().endswith(".pdf"))
 
-    try:
-        image = Image.open(tmp_path)
+    if is_pdf:
+        # Parse selected pages if provided
+        selected_page_numbers = None
+        if pages:
+            try:
+                selected_page_numbers = [int(p.strip()) for p in pages.split(",") if p.strip()]
+                if not selected_page_numbers:
+                    selected_page_numbers = None
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid page numbers format: '{pages}'. Expected comma-separated integers (e.g., '1,3,5')",
+                )
+
+        try:
+            images = pdf_to_images(content, selected_pages=selected_page_numbers)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    elif content_type.startswith("image/"):
+        images = [Image.open(io.BytesIO(content))]
+    else:
+        raise HTTPException(status_code=400, detail="File must be an image or PDF")
+
+    # Process all images and collect results
+    results = []
+    for page_idx, image in enumerate(images):
         formatted_prompt = apply_chat_template(processor, config, prompt, num_images=1)
 
         output = generate(
@@ -138,9 +162,13 @@ async def ocr(
         else:
             result = output
 
-        return JSONResponse(content={"result": result})
-    finally:
-        os.unlink(tmp_path)
+        results.append({"page": page_idx + 1, "text": result})
+
+    # Return appropriate format based on number of pages
+    if len(results) == 1:
+        return JSONResponse(content={"result": results[0]["text"]})
+    else:
+        return JSONResponse(content={"results": results, "total_pages": len(results)})
 
 
 @app.post("/api/ocr/stream")

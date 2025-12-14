@@ -30,7 +30,7 @@ uv pip install -r requirements.txt
 ### 웹 서버 실행
 
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8787
 ```
 
 브라우저에서 http://localhost:8000 접속
@@ -62,7 +62,7 @@ curl -X POST http://localhost:8000/api/ocr/stream \
 
 ### POST /api/ocr
 
-일반 OCR 엔드포인트 (이미지만 지원)
+일반 OCR 엔드포인트 (이미지 + PDF 지원)
 
 ```bash
 curl -X POST http://localhost:8000/api/ocr \
