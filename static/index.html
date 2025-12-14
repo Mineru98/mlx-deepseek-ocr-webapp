@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Service</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#1E40AF'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .drop-zone.dragover {
+            border-color: #3B82F6;
+            background-color: #EFF6FF;
+        }
+        .result-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-fast {
+            animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">OCR Service</h1>
+            <p class="text-gray-600">이미지 또는 PDF에서 텍스트를 추출합니다</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <!-- File Upload Area -->
+            <div
+                id="dropZone"
+                class="drop-zone border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer transition-all duration-200 hover:border-primary hover:bg-blue-50"
+            >
+                <input
+                    type="file"
+                    id="fileInput"
+                    accept="image/*,.pdf"
+                    class="hidden"
+                >
+                <div class="flex flex-col items-center">
+                    <svg class="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p class="text-lg text-gray-600 mb-2">파일을 드래그하거나 클릭하여 업로드</p>
+                    <p class="text-sm text-gray-400">지원 형식: 이미지 (PNG, JPG, WEBP) 또는 PDF</p>
+                </div>
+            </div>
+
+            <!-- File Preview -->
+            <div id="filePreview" class="mt-4 hidden">
+                <div class="flex items-center justify-between bg-gray-100 rounded-lg p-4">
+                    <div class="flex items-center space-x-3">
+                        <div id="previewIcon" class="w-10 h-10 flex items-center justify-center bg-primary rounded text-white">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p id="fileName" class="font-medium text-gray-800"></p>
+                            <p id="fileSize" class="text-sm text-gray-500"></p>
+                        </div>
+                    </div>
+                    <button
+                        id="removeFile"
+                        class="text-red-500 hover:text-red-700 transition-colors"
+                    >
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Image Preview Thumbnail -->
+                <div id="imagePreviewContainer" class="mt-4 hidden">
+                    <img id="imagePreview" class="max-h-48 mx-auto rounded-lg shadow" alt="Preview">
+                </div>
+            </div>
+
+            <!-- Prompt Input -->
+            <div class="mt-6">
+                <label for="promptInput" class="block text-sm font-medium text-gray-700 mb-2">
+                    프롬프트 (선택사항)
+                </label>
+                <textarea
+                    id="promptInput"
+                    rows="3"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all resize-none"
+                    placeholder="기본값: Read all the text in this image."
+                ></textarea>
+            </div>
+
+            <!-- Options -->
+            <div class="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                    <label for="maxTokens" class="block text-sm font-medium text-gray-700 mb-2">
+                        Max Tokens
+                    </label>
+                    <input
+                        type="number"
+                        id="maxTokens"
+                        value="4096"
+                        min="100"
+                        max="8192"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    >
+                </div>
+                <div>
+                    <label for="temperature" class="block text-sm font-medium text-gray-700 mb-2">
+                        Temperature
+                    </label>
+                    <input
+                        type="number"
+                        id="temperature"
+                        value="0.0"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    >
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button
+                id="submitBtn"
+                disabled
+                class="mt-6 w-full bg-primary text-white py-3 px-6 rounded-lg font-medium hover:bg-secondary transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+                <span id="submitText">텍스트 추출</span>
+                <svg id="submitSpinner" class="hidden animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Result Section -->
+        <div id="resultSection" class="hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800">추출 결과</h2>
+                    <div class="flex space-x-2">
+                        <span id="pageInfo" class="text-sm text-gray-500 hidden"></span>
+                        <button
+                            id="copyBtn"
+                            class="text-gray-500 hover:text-primary transition-colors"
+                            title="결과 복사"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Processing Status -->
+                <div id="processingStatus" class="hidden mb-4 p-3 bg-blue-50 rounded-lg">
+                    <div class="flex items-center space-x-2">
+                        <div class="animate-pulse-fast w-2 h-2 bg-primary rounded-full"></div>
+                        <span id="statusText" class="text-sm text-primary">처리 중...</span>
+                    </div>
+                </div>
+                <!-- Result Content -->
+                <div
+                    id="resultContent"
+                    class="result-content bg-gray-50 rounded-lg p-4 min-h-[200px] max-h-[500px] overflow-y-auto text-gray-800 font-mono text-sm"
+                ></div>
+                <!-- File Info -->
+                <div id="fileInfo" class="mt-4 text-sm text-gray-500 hidden">
+                    <span id="processedFilename"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-full opacity-0 transition-all duration-300">
+            <span id="toastMessage"></span>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const removeFile = document.getElementById('removeFile');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const promptInput = document.getElementById('promptInput');
+        const maxTokens = document.getElementById('maxTokens');
+        const temperature = document.getElementById('temperature');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitSpinner = document.getElementById('submitSpinner');
+        const resultSection = document.getElementById('resultSection');
+        const resultContent = document.getElementById('resultContent');
+        const processingStatus = document.getElementById('processingStatus');
+        const statusText = document.getElementById('statusText');
+        const pageInfo = document.getElementById('pageInfo');
+        const copyBtn = document.getElementById('copyBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const processedFilename = document.getElementById('processedFilename');
+        const previewIcon = document.getElementById('previewIcon');
+
+        let selectedFile = null;
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Show toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.textContent = message;
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-full', 'opacity-0');
+            }, 3000);
+        }
+
+        // Handle file selection
+        function handleFileSelect(file) {
+            if (!file) return;
+
+            const isImage = file.type.startsWith('image/');
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+            if (!isImage && !isPdf) {
+                showToast('이미지 또는 PDF 파일만 업로드 가능합니다.');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            filePreview.classList.remove('hidden');
+            submitBtn.disabled = false;
+
+            // Update icon based on file type
+            if (isPdf) {
+                previewIcon.innerHTML = `
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                `;
+                previewIcon.classList.remove('bg-green-500');
+                previewIcon.classList.add('bg-red-500');
+                imagePreviewContainer.classList.add('hidden');
+            } else {
+                previewIcon.innerHTML = `
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                `;
+                previewIcon.classList.remove('bg-red-500');
+                previewIcon.classList.add('bg-green-500');
+
+                // Show image preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Click to upload
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0]);
+        });
+
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        // Remove file
+        removeFile.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectedFile = null;
+            fileInput.value = '';
+            filePreview.classList.add('hidden');
+            imagePreviewContainer.classList.add('hidden');
+            submitBtn.disabled = true;
+        });
+
+        // Copy result
+        copyBtn.addEventListener('click', () => {
+            const text = resultContent.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('결과가 클립보드에 복사되었습니다.');
+            });
+        });
+
+        // Submit OCR request
+        submitBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            // UI state: processing
+            submitBtn.disabled = true;
+            submitText.textContent = '처리 중...';
+            submitSpinner.classList.remove('hidden');
+            resultSection.classList.remove('hidden');
+            resultContent.textContent = '';
+            processingStatus.classList.remove('hidden');
+            statusText.textContent = '파일 업로드 중...';
+            pageInfo.classList.add('hidden');
+            fileInfo.classList.add('hidden');
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('prompt', promptInput.value || 'Read all the text in this image.');
+            formData.append('max_tokens', maxTokens.value);
+            formData.append('temperature', temperature.value);
+
+            try {
+                const response = await fetch('/api/ocr/stream', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let currentPage = 1;
+                let totalPages = 1;
+                let fullText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+
+                                if (data.type === 'page_start') {
+                                    statusText.textContent = `페이지 ${data.page}/${data.total} 처리 중...`;
+                                    totalPages = data.total;
+                                    currentPage = data.page;
+                                    if (data.page > 1) {
+                                        fullText += '\n\n--- 페이지 ' + data.page + ' ---\n\n';
+                                        resultContent.textContent = fullText;
+                                    }
+                                } else if (data.type === 'content') {
+                                    fullText += data.text;
+                                    resultContent.textContent = fullText;
+                                    resultContent.scrollTop = resultContent.scrollHeight;
+                                } else if (data.type === 'page_end') {
+                                    // Page completed
+                                } else if (data.type === 'done') {
+                                    statusText.textContent = '완료!';
+                                    processedFilename.textContent = `처리된 파일: ${data.filename}`;
+                                    fileInfo.classList.remove('hidden');
+                                    if (data.total_pages > 1) {
+                                        pageInfo.textContent = `총 ${data.total_pages} 페이지`;
+                                        pageInfo.classList.remove('hidden');
+                                    }
+                                }
+                            } catch (e) {
+                                // Handle malformed JSON (like page markers with single quotes)
+                                if (line.includes("'type': 'page_start'")) {
+                                    const match = line.match(/page': (\d+), 'total': (\d+)/);
+                                    if (match) {
+                                        statusText.textContent = `페이지 ${match[1]}/${match[2]} 처리 중...`;
+                                        if (parseInt(match[1]) > 1) {
+                                            fullText += '\n\n--- 페이지 ' + match[1] + ' ---\n\n';
+                                            resultContent.textContent = fullText;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                processingStatus.classList.add('hidden');
+            } catch (error) {
+                console.error('Error:', error);
+                resultContent.textContent = '오류가 발생했습니다: ' + error.message;
+                processingStatus.classList.add('hidden');
+                showToast('처리 중 오류가 발생했습니다.');
+            } finally {
+                submitBtn.disabled = false;
+                submitText.textContent = '텍스트 추출';
+                submitSpinner.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
