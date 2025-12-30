@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
 
-import fitz  # PyMuPDF
+import fitz
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -50,19 +50,15 @@ def pdf_to_images(pdf_bytes: bytes, dpi: int = 150, selected_pages: Optional[lis
     pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
     total_pages = len(pdf_document)
 
-    # Validate selected pages
     if selected_pages is not None:
-        # Check for invalid page numbers
         invalid_pages = [p for p in selected_pages if p < 1 or p > total_pages]
         if invalid_pages:
             pdf_document.close()
             raise ValueError(
                 f"Invalid page numbers: {invalid_pages}. " f"PDF has {total_pages} pages (valid range: 1-{total_pages})"
             )
-        # Convert to 0-based indices
         page_indices = [p - 1 for p in selected_pages]
     else:
-        # Process all pages
         page_indices = range(total_pages)
 
     for page_idx in page_indices:
@@ -71,7 +67,6 @@ def pdf_to_images(pdf_bytes: bytes, dpi: int = 150, selected_pages: Optional[lis
         pix = page.get_pixmap(matrix=mat)
         img_data = pix.tobytes("png")
         image = Image.open(io.BytesIO(img_data))
-        # Convert to RGB to ensure 3 channels
         if image.mode != "RGB":
             image = image.convert("RGB")
         images.append(image)
@@ -93,12 +88,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OCR API", description="OCR API using DeepSeek-OCR with MLX", lifespan=lifespan)
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]  # type: ignore
 )
 
-# Static files for frontend
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -116,11 +109,9 @@ async def ocr(
     content = await file.read()
     content_type = file.content_type or ""
 
-    # Determine if PDF or image
     is_pdf = content_type == "application/pdf" or (file.filename and file.filename.lower().endswith(".pdf"))
 
     if is_pdf:
-        # Parse selected pages if provided
         selected_page_numbers = None
         if pages:
             try:
@@ -139,21 +130,18 @@ async def ocr(
             raise HTTPException(status_code=400, detail=str(e))
     elif content_type.startswith("image/"):
         image = Image.open(io.BytesIO(content))
-        # Convert to RGB to ensure 3 channels
         if image.mode != "RGB":
             image = image.convert("RGB")
         images = [image]
     else:
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
 
-    # Process all images and collect results
     if model is None or processor is None or config is None:
         raise HTTPException(status_code=503, detail="Model is not loaded yet. Please wait for initialization.")
 
     results = []
     for page_idx, image in enumerate(images):
         formatted_prompt = apply_chat_template(processor, config, prompt, num_images=1)
-        # Ensure formatted_prompt is a string
         prompt_str = str(formatted_prompt) if not isinstance(formatted_prompt, str) else formatted_prompt
 
         output = generate(
@@ -166,7 +154,6 @@ async def ocr(
             verbose=False,
         )
 
-        # Handle GenerationResult object
         if hasattr(output, "text"):
             result = output.text
         elif hasattr(output, "__str__"):
@@ -176,7 +163,6 @@ async def ocr(
 
         results.append({"page": page_idx + 1, "text": result})
 
-    # Return appropriate format based on number of pages
     if len(results) == 1:
         return JSONResponse(content={"result": results[0]["text"]})
     else:
@@ -198,11 +184,9 @@ async def ocr_stream(
     content_type = file.content_type or ""
     unique_filename = generate_unique_filename(file.filename or "file")
 
-    # Determine if PDF or image
     is_pdf = content_type == "application/pdf" or (file.filename and file.filename.lower().endswith(".pdf"))
 
     if is_pdf:
-        # Parse selected pages if provided
         selected_page_numbers = None
         if pages:
             try:
@@ -221,7 +205,6 @@ async def ocr_stream(
             raise HTTPException(status_code=400, detail=str(e))
     elif content_type.startswith("image/"):
         image = Image.open(io.BytesIO(content))
-        # Convert to RGB to ensure 3 channels
         if image.mode != "RGB":
             image = image.convert("RGB")
         images = [image]
@@ -233,29 +216,21 @@ async def ocr_stream(
 
     def generate_stream():
         for page_idx, image in enumerate(images):
-            # Send page start marker
             yield f"data: {json.dumps({'type': 'page_start', 'page': page_idx + 1, 'total': len(images)})}\n\n"
 
             formatted_prompt = apply_chat_template(processor, config, prompt, num_images=1)
-            # Ensure formatted_prompt is a string
             prompt_str = str(formatted_prompt) if not isinstance(formatted_prompt, str) else formatted_prompt
 
-            # Use stream_generate for real token-by-token streaming
             token_generator = stream_generate(
                 model, processor, prompt_str, image=[image], max_tokens=max_tokens, temperature=temperature
             )
 
-            # Stream tokens as they are generated
             for result in token_generator:
-                # result is a GenerationResult object, extract the text
                 text = result.text if hasattr(result, "text") else str(result)
                 if text:
                     yield f"data: {json.dumps({'type': 'content', 'text': text, 'page': page_idx + 1})}\n\n"
-
-            # Send page end marker
             yield f"data: {json.dumps({'type': 'page_end', 'page': page_idx + 1})}\n\n"
 
-        # Send completion marker
         yield f"data: {json.dumps({'type': 'done', 'filename': unique_filename, 'total_pages': len(images)})}\n\n"
 
     return StreamingResponse(
