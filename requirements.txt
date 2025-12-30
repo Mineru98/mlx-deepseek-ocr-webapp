@@ -3,4 +3,4 @@ uvicorn
 python-multipart
 mlx-vlm
 pillow
-pymupdf
+PyMuPDF

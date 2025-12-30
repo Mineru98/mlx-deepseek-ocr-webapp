@@ -9,6 +9,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "python-multipart",
+    "PyMuPDF",
 ]
 
 [tool.uv]

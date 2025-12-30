@@ -4,7 +4,7 @@ import os
 import tempfile
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 import fitz  # PyMuPDF
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -16,9 +16,9 @@ from mlx_vlm.prompt_utils import apply_chat_template
 from mlx_vlm.utils import load_config
 from PIL import Image
 
-model = None
-processor = None
-config = None
+model: Any = None
+processor: Any = None
+config: Any = None
 
 MODEL_PATH = "mlx-community/DeepSeek-OCR-8bit"
 
@@ -95,7 +95,7 @@ app = FastAPI(title="OCR API", description="OCR API using DeepSeek-OCR with MLX"
 
 # CORS middleware
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
+    CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]  # type: ignore
 )
 
 # Static files for frontend
@@ -147,14 +147,19 @@ async def ocr(
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
 
     # Process all images and collect results
+    if model is None or processor is None or config is None:
+        raise HTTPException(status_code=503, detail="Model is not loaded yet. Please wait for initialization.")
+
     results = []
     for page_idx, image in enumerate(images):
         formatted_prompt = apply_chat_template(processor, config, prompt, num_images=1)
+        # Ensure formatted_prompt is a string
+        prompt_str = str(formatted_prompt) if not isinstance(formatted_prompt, str) else formatted_prompt
 
         output = generate(
             model,
             processor,
-            formatted_prompt,
+            prompt_str,
             image=[image],
             max_tokens=max_tokens,
             temperature=temperature,
@@ -223,16 +228,21 @@ async def ocr_stream(
     else:
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
 
+    if model is None or processor is None or config is None:
+        raise HTTPException(status_code=503, detail="Model is not loaded yet. Please wait for initialization.")
+
     def generate_stream():
         for page_idx, image in enumerate(images):
             # Send page start marker
             yield f"data: {json.dumps({'type': 'page_start', 'page': page_idx + 1, 'total': len(images)})}\n\n"
 
             formatted_prompt = apply_chat_template(processor, config, prompt, num_images=1)
+            # Ensure formatted_prompt is a string
+            prompt_str = str(formatted_prompt) if not isinstance(formatted_prompt, str) else formatted_prompt
 
             # Use stream_generate for real token-by-token streaming
             token_generator = stream_generate(
-                model, processor, formatted_prompt, image=[image], max_tokens=max_tokens, temperature=temperature
+                model, processor, prompt_str, image=[image], max_tokens=max_tokens, temperature=temperature
             )
 
             # Stream tokens as they are generated
